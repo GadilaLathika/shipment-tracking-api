@@ -1,0 +1,67 @@
+
+#%RAML 1.0
+title: Shipment Tracking API
+version: v1
+baseUri: /api
+
+types:
+  TrackingEvent:
+    type: object
+    properties:
+      trackingNumber: string
+      carrier: string
+      eventId: string
+      status: string
+      location?: string
+      timestamp: datetime
+    example:
+      trackingNumber: "BD123456"
+      carrier: "BLUEDART"
+      eventId: "EVT001"
+      status: "IN_TRANSIT"
+      location: "Chennai"
+      timestamp: 2026-10-10T10:30:00Z
+
+/shipment-events:
+  post:
+    description: Accept a tracking event from a carrier webhook
+    body:
+      application/json:
+        type: TrackingEvent
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              message: Event accepted
+
+/shipments/{trackingNumber}:
+  uriParameters:
+    trackingNumber: string
+  get:
+    description: Get the latest tracking status for a shipment
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              trackingNumber: "BD123456"
+              status: "IN_TRANSIT"
+      404:
+        body:
+          application/json:
+            example:
+              message: Shipment not found
+
+/shipments/{trackingNumber}/events:
+  uriParameters:
+    trackingNumber: string
+  get:
+    description: Get the tracking event history for a shipment
+    responses:
+      200:
+        body:
+          application/json:
+            example:
+              trackingNumber: "BD123456"
+              events: []

@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/core
+        http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit
+        http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools
+        http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="munit"/>
+
+    <!-- TEST 1: Valid Blue Dart event -->
+    <munit:test name="valid-blue-dart-test"
+                description="Accepts and publishes a Blue Dart event">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="vm:publish">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[payload]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'BD123456',
+                      carrier: 'BLUE DART',
+                      eventId: 'EVT1001',
+                      status: 'In Transit',
+                      location: 'Hyderabad',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.message]"
+                is="#[MunitTools::equalTo('Event accepted')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="1"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 2: Valid Delhivery event -->
+    <munit:test name="valid-delhivery-test"
+                description="Accepts and publishes a Delhivery event">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="vm:publish">
+                <munit-tools:then-return>
+                    <munit-tools:payload value="#[payload]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'DL123456',
+                      carrier: 'DELHIVERY',
+                      eventId: 'EVT2001',
+                      status: 'Picked Up',
+                      location: 'Chennai',
+                      timestamp: '2026-10-13T11:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.message]"
+                is="#[MunitTools::equalTo('Event accepted')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="1"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 3: Missing tracking number -->
+    <munit:test name="missing-tracking-number-test"
+                description="Rejects an event without trackingNumber">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      carrier: 'BLUEDART',
+                      eventId: 'EVT3001',
+                      status: 'IN_TRANSIT',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 4: Missing carrier -->
+    <munit:test name="missing-carrier-test"
+                description="Rejects an event without carrier">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'BD123456',
+                      eventId: 'EVT3002',
+                      status: 'IN_TRANSIT',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 5: Missing event ID -->
+    <munit:test name="missing-event-id-test"
+                description="Rejects an event without eventId">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'BD123456',
+                      carrier: 'BLUEDART',
+                      status: 'IN_TRANSIT',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 6: Missing status -->
+    <munit:test name="missing-status-test"
+                description="Rejects an event without status">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'BD123456',
+                      carrier: 'BLUEDART',
+                      eventId: 'EVT3004',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 7: Missing timestamp -->
+    <munit:test name="missing-timestamp-test"
+                description="Rejects an event without timestamp">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: 'BD123456',
+                      carrier: 'BLUEDART',
+                      eventId: 'EVT3005',
+                      status: 'IN_TRANSIT'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 8: Empty tracking number -->
+    <munit:test name="empty-tracking-number-test"
+                description="Rejects an empty trackingNumber">
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:payload mediaType="application/java"
+                    value="#[{
+                      trackingNumber: '',
+                      carrier: 'BLUEDART',
+                      eventId: 'EVT3006',
+                      status: 'IN_TRANSIT',
+                      timestamp: '2026-10-13T10:00:00'
+                    }]"/>
+            </munit:set-event>
+
+            <flow-ref name="post:\shipment-events:application\json:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.error]"
+                is="#[MunitTools::equalTo('Bad Request')]"/>
+
+            <munit-tools:verify-call processor="vm:publish" times="0"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 9: Latest shipment exists -->
+    <munit:test name="get-shipment-found-test"
+                description="Returns the latest shipment event">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload mediaType="application/java"
+                        value="#[[
+                          {
+                            trackingNumber: 'BD123456',
+                            carrier: 'BLUEDART',
+                            status: 'IN_TRANSIT',
+                            location: 'Hyderabad',
+                            eventTimestamp: '2026-10-13T17:00:00'
+                          }
+                        ]]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:attributes
+                    value="#[{uriParams: {trackingNumber: 'BD123456'}}]"
+                    mediaType="application/java"/>
+            </munit:set-event>
+
+            <flow-ref name="get:\shipments\(trackingNumber):shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.trackingNumber]"
+                is="#[MunitTools::equalTo('BD123456')]"/>
+
+            <munit-tools:assert-that
+                expression="#[payload.status]"
+                is="#[MunitTools::equalTo('IN_TRANSIT')]"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 10: Latest shipment not found -->
+    <munit:test name="get-shipment-not-found-test"
+                description="Returns a not-found message for an unknown shipment">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload
+                        value="#[[]]"
+                        mediaType="application/java"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:attributes
+                    value="#[{uriParams: {trackingNumber: 'UNKNOWN123'}}]"
+                    mediaType="application/java"/>
+            </munit:set-event>
+
+            <flow-ref name="get:\shipments\(trackingNumber):shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.message]"
+                is="#[MunitTools::equalTo('Shipment not found')]"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 11: Shipment history with multiple events -->
+    <munit:test name="get-shipment-history-test"
+                description="Returns the complete shipment event history">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload mediaType="application/java"
+                        value="#[[
+                          {
+                            trackingNumber: 'BD123456',
+                            carrier: 'BLUEDART',
+                            eventId: 'EVT1002',
+                            status: 'IN_TRANSIT',
+                            location: 'Hyderabad',
+                            eventTimestamp: '2026-10-13T17:00:00'
+                          },
+                          {
+                            trackingNumber: 'BD123456',
+                            carrier: 'BLUEDART',
+                            eventId: 'EVT1001',
+                            status: 'PICKED_UP',
+                            location: 'Chennai',
+                            eventTimestamp: '2026-10-12T10:00:00'
+                          }
+                        ]]"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:attributes
+                    value="#[{uriParams: {trackingNumber: 'BD123456'}}]"
+                    mediaType="application/java"/>
+            </munit:set-event>
+
+            <flow-ref name="get:\shipments\(trackingNumber)\events:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.trackingNumber]"
+                is="#[MunitTools::equalTo('BD123456')]"/>
+
+            <munit-tools:assert-that
+                expression="#[sizeOf(payload.events)]"
+                is="#[MunitTools::equalTo(2)]"/>
+
+            <munit-tools:assert-that
+                expression="#[payload.events[0].eventId]"
+                is="#[MunitTools::equalTo('EVT1002')]"/>
+        </munit:validation>
+    </munit:test>
+
+
+    <!-- TEST 12: Shipment history is empty -->
+    <munit:test name="get-shipment-empty-history-test"
+                description="Returns an empty events array for an unknown shipment">
+
+        <munit:behavior>
+            <munit-tools:mock-when processor="db:select">
+                <munit-tools:then-return>
+                    <munit-tools:payload
+                        value="#[[]]"
+                        mediaType="application/java"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+
+        <munit:execution>
+            <munit:set-event>
+                <munit:attributes
+                    value="#[{uriParams: {trackingNumber: 'UNKNOWN123'}}]"
+                    mediaType="application/java"/>
+            </munit:set-event>
+
+            <flow-ref name="get:\shipments\(trackingNumber)\events:shipment-tracking-config"/>
+        </munit:execution>
+
+        <munit:validation>
+            <munit-tools:assert-that
+                expression="#[payload.trackingNumber]"
+                is="#[MunitTools::equalTo('UNKNOWN123')]"/>
+
+            <munit-tools:assert-that
+                expression="#[sizeOf(payload.events)]"
+                is="#[MunitTools::equalTo(0)]"/>
+        </munit:validation>
+    </munit:test>
+
+
+</mule>

@@ -1,0 +1,12 @@
+﻿# Generated build files
+target/
+# Logs
+*.log
+# Local credentials and configuration
+config.properties
+# Local IDE metadata
+.metadata/
+
+# Mule runtime and IDE metadata
+.mule/
+.settings/

@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+        http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+
+    <!-- Load database password from config.properties -->
+    <configuration-properties file="config.properties"/>
+
+    <!-- HTTP Listener -->
+    <http:listener-config name="shipment-tracking-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8090"/>
+    </http:listener-config>
+
+    <!-- APIKit -->
+    <apikit:config
+        name="shipment-tracking-config"
+        api="shipment-tracking.raml"
+        outboundHeadersMapName="outboundHeaders"
+        httpStatusVarName="httpStatus"/>
+
+    <!-- Database connection -->
+    <db:config name="Database_Config">
+        <db:generic-connection
+            url="jdbc:mysql://localhost:3306/shipment_tracking"
+            driverClassName="com.mysql.cj.jdbc.Driver"
+            user="root"
+            password="${db.password}"/>
+    </db:config>
+
+    <!-- Retained for the existing database connectivity test -->
+    <db:config name="Database_Config1">
+        <db:generic-connection
+            url="jdbc:mysql://localhost:3306/shipment_tracking"
+            driverClassName="com.mysql.cj.jdbc.Driver"
+            user="root"
+            password="${db.password}"/>
+    </db:config>
+
+    <!-- Local VM queue -->
+    <vm:config name="VM_Config">
+        <vm:queues>
+            <vm:queue queueName="shipment-events"/>
+        </vm:queues>
+    </vm:config>
+
+    <!-- Existing database connectivity test -->
+    <flow name="shipment-trackingFlow">
+        <db:select config-ref="Database_Config1">
+            <db:sql><![CDATA[SELECT 1]]></db:sql>
+        </db:select>
+    </flow>
+
+    <!-- Main HTTP listener and APIKit router -->
+    <flow name="shipment-tracking-main">
+        <http:listener
+            config-ref="shipment-tracking-httpListenerConfig"
+            path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <apikit:router config-ref="shipment-tracking-config"/>
+
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- APIKit console -->
+    <flow name="shipment-tracking-console">
+        <http:listener
+            config-ref="shipment-tracking-httpListenerConfig"
+            path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <apikit:console config-ref="shipment-tracking-config"/>
+
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET latest shipment status -->
+    <flow name="get:\shipments\(trackingNumber):shipment-tracking-config">
+        <ee:transform doc:name="Get Tracking Number">
+            <ee:variables>
+                <ee:set-variable variableName="trackingNumber"><![CDATA[attributes.uriParams.'trackingNumber']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <db:select config-ref="Database_Config">
+            <db:sql><![CDATA[
+SELECT
+    tracking_number AS trackingNumber,
+    carrier,
+    status,
+    location,
+    event_timestamp AS eventTimestamp
+FROM shipment_events
+WHERE tracking_number = :trackingNumber
+ORDER BY event_timestamp DESC, id DESC
+LIMIT 1
+]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+    trackingNumber: vars.trackingNumber
+}]]]></db:input-parameters>
+        </db:select>
+
+        <set-variable value="#[if (isEmpty(payload)) 404 else 200]" doc:name="Set Variable" doc:id="6ebceea7-2b59-4c87-9f00-28467762c4a3" variableName="httpStatus"/>
+		<ee:transform doc:name="Format Shipment Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (isEmpty(payload))
+    {message: "Shipment not found"}
+else
+    payload[0]
+]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- GET complete shipment event history -->
+	<flow name="get:\shipments\(trackingNumber)\events:shipment-tracking-config">
+        <ee:transform doc:name="Get Tracking Number">
+            <ee:variables>
+                <ee:set-variable variableName="trackingNumber"><![CDATA[attributes.uriParams.'trackingNumber']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <db:select config-ref="Database_Config">
+            <db:sql><![CDATA[
+SELECT
+    tracking_number AS trackingNumber,
+    carrier,
+    event_id AS eventId,
+    status,
+    location,
+    event_timestamp AS eventTimestamp
+FROM shipment_events
+WHERE tracking_number = :trackingNumber
+ORDER BY event_timestamp DESC, id DESC
+]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+    trackingNumber: vars.trackingNumber
+}]]]></db:input-parameters>
+        </db:select>
+
+        <ee:transform doc:name="Format Event History">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    trackingNumber: vars.trackingNumber,
+    events: payload
+}
+]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- Queue consumer: VM Listener -> Logger -> MySQL Insert -->
+
+<flow name="shipment-trackingFlow1">
+    <vm:listener
+        queueName="shipment-events"
+        doc:name="Shipment Event Queue Listener"
+        config-ref="VM_Config"
+        numberOfConsumers="1" />
+
+    <logger
+        level="INFO"
+        message="Shipment event received from VM queue" />
+
+    <try doc:name="Process Shipment Event">
+        <db:insert
+            config-ref="Database_Config"
+            doc:name="Insert Queued Shipment Event">
+
+            <db:sql><![CDATA[
+INSERT INTO shipment_events
+(
+    tracking_number,
+    carrier,
+    event_id,
+    status,
+    location,
+    event_timestamp
+)
+VALUES
+(
+    :trackingNumber,
+    :carrier,
+    :eventId,
+    :status,
+    :location,
+    :timestamp
+)
+ON DUPLICATE KEY UPDATE id = id
+]]></db:sql>
+
+            <db:input-parameters><![CDATA[#[{
+    trackingNumber: payload.trackingNumber,
+    carrier: payload.carrier,
+    eventId: payload.eventId,
+    status: payload.status,
+    location: payload.location default null,
+    timestamp: (payload.timestamp as DateTime) as String {format: "yyyy-MM-dd HH:mm:ss"}
+}]]]></db:input-parameters>
+        </db:insert>
+
+        <error-handler>
+            <on-error-continue
+                type="ANY"
+                logException="true"
+                doc:name="Log Shipment Processing Failure">
+
+                <logger
+                    level="ERROR"
+                    message="Failed to save shipment event to MySQL. Review the preceding exception in the Mule console." />
+            </on-error-continue>
+        </error-handler>
+    </try>
+</flow>
+
+
+    <!-- POST shipment event: normalize -> validate -> publish -> respond -->
+
+<flow name="post:\shipment-events:application\json:shipment-tracking-config">
+
+    <!-- Step 1: Authenticate request -->
+    <choice doc:name="Authenticate Carrier Webhook">
+
+        <when expression="#[attributes.headers.'x-api-key' == p('webhook.api.key')]">
+
+            <!-- Step 2: Normalize carrier event -->
+            <ee:transform doc:name="Normalize Carrier Event">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+var incoming = payload
+var carrierName = upper(trim(incoming.carrier default ""))
+var rawStatus = upper(trim(incoming.status default ""))
+---
+{
+    trackingNumber: incoming.trackingNumber,
+    carrier:
+        if (carrierName == "BLUE DART" or carrierName == "BLUEDART")
+            "BLUEDART"
+        else if (carrierName == "DELHIVERY")
+            "DELHIVERY"
+        else
+            carrierName,
+    eventId: incoming.eventId,
+    status:
+        if (rawStatus == "PICKED UP" or rawStatus == "PICKUP")
+            "PICKED_UP"
+        else if (rawStatus == "IN TRANSIT" or rawStatus == "IN-TRANSIT")
+            "IN_TRANSIT"
+        else if (rawStatus == "OUT FOR DELIVERY")
+            "OUT_FOR_DELIVERY"
+        else
+            rawStatus,
+    location: incoming.location default null,
+    timestamp: incoming.timestamp
+}
+]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+
+            <!-- Step 3: Validate required fields -->
+            <choice doc:name="Validate Shipment Event">
+
+                <when expression="#[!isEmpty(payload.trackingNumber default '') and !isEmpty(payload.carrier default '') and !isEmpty(payload.eventId default '') and !isEmpty(payload.status default '') and !isEmpty(payload.timestamp default '')]">
+
+                    <!-- Step 4: Publish to existing VM queue -->
+                    <vm:publish
+                        config-ref="VM_Config"
+                        queueName="shipment-events"
+                        doc:name="Publish Shipment Event"/>
+
+                    <!-- Step 5: Return success -->
+                    <ee:transform doc:name="Return Event Accepted">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    message: "Event accepted"
+}
+]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+
+                </when>
+
+                <otherwise>
+                    <set-variable
+                        variableName="httpStatus"
+                        value="#[400]"
+                        doc:name="Set Bad Request Status"/>
+
+                    <ee:transform doc:name="Return Bad Request">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Bad Request",
+    message: "Required shipment fields are missing."
+}
+]]></ee:set-payload>
+                        </ee:message>
+                    </ee:transform>
+                </otherwise>
+
+            </choice>
+
+        </when>
+
+        <!-- Invalid or missing API key -->
+        <otherwise>
+            <set-variable
+                variableName="httpStatus"
+                value="#[401]"
+                doc:name="Set Unauthorized Status"/>
+
+            <ee:transform doc:name="Return Unauthorized">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    error: "Unauthorized",
+    message: "A valid API key is required."
+}
+]]></ee:set-payload>
+                </ee:message>
+            </ee:transform>
+        </otherwise>
+
+    </choice>
+
+</flow>
+
+
+</mule>
