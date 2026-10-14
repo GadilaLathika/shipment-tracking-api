@@ -9,6 +9,7 @@ The project provides a unified API for handling carrier tracking updates. It val
 ## Architecture
 
 The solution is organized around three API-led connectivity layers:
+<img width="1168" height="739" alt="mInr7" src="https://github.com/user-attachments/assets/812061c0-2a63-4874-a9d1-e3ce97abbb6d" />
 
 1. **Experience API:** Exposes HTTP endpoints using RAML and APIKit, accepts shipment events, and validates API-key authentication.
 2. **Process Layer:** Validates event fields, normalizes carrier names and status values using DataWeave, and dispatches events for asynchronous processing.
@@ -48,6 +49,9 @@ Blue Dart / Delhivery → Experience API → Process and normalization → VM Qu
 - Shipment status and tracking-history retrieval.
 - RAML-based API definition and APIKit routing.
 - MUnit tests for valid requests, missing fields, and tracking queries.
+
+<img width="1168" height="739" alt="5kEDE" src="https://github.com/user-attachments/assets/4c92b8b4-1823-4ecf-96c5-7dfd69ccf310" />
+
 
 ## Planned Enhancements
 
